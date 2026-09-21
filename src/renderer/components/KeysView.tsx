@@ -1,18 +1,20 @@
 import React, { useState } from 'react'
-import { ApiKey } from '@/types'
-import { Plus, Search, Copy, Trash2, Edit, Eye, EyeOff } from 'lucide-react'
+import { ApiKey, Settings } from '@/types'
+import { Plus, Search, Copy, Trash2, Edit, Eye, EyeOff, Star } from 'lucide-react'
 
 interface KeysViewProps {
   keys: ApiKey[]
+  settings: Settings
   onSaveKeys: (keys: ApiKey[]) => void
   currentPassword: string
 }
 
-export default function KeysView({ keys, onSaveKeys, currentPassword }: KeysViewProps) {
+export default function KeysView({ keys, settings, onSaveKeys, currentPassword }: KeysViewProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
   const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({})
+  const [filterCategory, setFilterCategory] = useState<string>('all')
 
   const handleSaveKey = async (keyData: Partial<ApiKey>) => {
     const newKey: ApiKey = {
@@ -50,11 +52,24 @@ export default function KeysView({ keys, onSaveKeys, currentPassword }: KeysView
     setShowPassword(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  const filteredKeys = keys.filter(k =>
-    k.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    k.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    k.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const handleToggleFavorite = (id: string) => {
+    const updatedKeys = keys.map(k =>
+      k.id === id ? { ...k, isFavorite: !k.isFavorite } : k
+    )
+    onSaveKeys(updatedKeys)
+  }
+
+  const filteredKeys = keys.filter(k => {
+    const matchesSearch = k.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      k.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      k.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+
+    const matchesCategory = filterCategory === 'all' ||
+      (filterCategory === 'uncategorized' && !k.category) ||
+      k.category === filterCategory
+
+    return matchesSearch && matchesCategory
+  })
 
   return (
     <div className="p-6">
@@ -76,6 +91,45 @@ export default function KeysView({ keys, onSaveKeys, currentPassword }: KeysView
           </button>
         </div>
 
+        {/* 分类过滤 */}
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFilterCategory('all')}
+              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                filterCategory === 'all'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              全部 ({keys.length})
+            </button>
+            <button
+              onClick={() => setFilterCategory('uncategorized')}
+              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                filterCategory === 'uncategorized'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              未分类 ({keys.filter(k => !k.category).length})
+            </button>
+            {settings.categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setFilterCategory(cat)}
+                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                  filterCategory === cat
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {cat} ({keys.filter(k => k.category === cat).length})
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
@@ -93,7 +147,18 @@ export default function KeysView({ keys, onSaveKeys, currentPassword }: KeysView
           <div key={key.id} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">{key.name}</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">{key.name}</h3>
+                  <button
+                    onClick={() => handleToggleFavorite(key.id)}
+                    className={`transition-colors ${
+                      key.isFavorite ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-500'
+                    }`}
+                    title={key.isFavorite ? '取消收藏' : '收藏'}
+                  >
+                    <Star className={`w-5 h-5 ${key.isFavorite ? 'fill-current' : ''}`} />
+                  </button>
+                </div>
                 <p className="text-sm text-gray-600 mb-3">{key.platform}</p>
 
                 <div className="flex items-center gap-2 mb-2">
@@ -120,15 +185,18 @@ export default function KeysView({ keys, onSaveKeys, currentPassword }: KeysView
                   <p className="text-sm text-gray-600 mb-2">{key.note}</p>
                 )}
 
-                {key.tags && key.tags.length > 0 && (
-                  <div className="flex gap-2">
-                    {key.tags.map((tag, i) => (
-                      <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <div className="flex gap-2 flex-wrap">
+                  {key.category && (
+                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">
+                      {key.category}
+                    </span>
+                  )}
+                  {key.tags && key.tags.length > 0 && key.tags.map((tag, i) => (
+                    <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               <div className="flex gap-2 ml-4">
@@ -170,6 +238,7 @@ export default function KeysView({ keys, onSaveKeys, currentPassword }: KeysView
             setShowAddModal(false)
             setEditingKey(null)
           }}
+          categories={settings.categories}
         />
       )}
     </div>
@@ -180,22 +249,25 @@ interface AddKeyModalProps {
   initialData: ApiKey | null
   onSave: (data: Partial<ApiKey>) => void
   onClose: () => void
+  categories: string[]
 }
 
-function AddKeyModal({ initialData, onSave, onClose }: AddKeyModalProps) {
+function AddKeyModal({ initialData, onSave, onClose, categories }: AddKeyModalProps) {
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
     platform: initialData?.platform || '',
     key: initialData?.key || '',
     note: initialData?.note || '',
-    tags: initialData?.tags?.join(', ') || ''
+    tags: initialData?.tags?.join(', ') || '',
+    category: initialData?.category || ''
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onSave({
       ...formData,
-      tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+      tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+      category: formData.category || undefined
     })
   }
 
@@ -249,6 +321,20 @@ function AddKeyModal({ initialData, onSave, onClose }: AddKeyModalProps) {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               rows={2}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">分类（可选）</label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="">未分类</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           </div>
 
           <div>

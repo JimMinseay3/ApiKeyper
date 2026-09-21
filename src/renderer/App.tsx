@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { ApiKey, MenuItem, Settings } from '@/types'
 import { StorageService } from '@/shared/storage'
-import { Lock, Plus, Search, Copy, Trash2, Edit, Eye, EyeOff, Key, Star, FolderTree, Download, Upload, Settings as SettingsIcon, Info, Menu, X } from 'lucide-react'
+import { Lock, Key, Star, FolderTree, Download, Upload, Settings as SettingsIcon, Info, Menu, X } from 'lucide-react'
 import KeysView from './components/KeysView'
+import FavoritesView from './components/FavoritesView'
+import CategoriesView from './components/CategoriesView'
+import ImportExportView from './components/ImportExportView'
 import SettingsView from './components/SettingsView'
 import AboutView from './components/AboutView'
 
@@ -18,6 +21,8 @@ function App() {
   const [settings, setSettings] = useState<Settings>(StorageService.getSettings())
   const [lastActivityTime, setLastActivityTime] = useState(Date.now())
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
     setIsFirstTime(!StorageService.hasMasterPassword())
@@ -250,33 +255,37 @@ function App() {
           {currentView === 'keys' && (
             <KeysView
               keys={keys}
+              settings={settings}
               onSaveKeys={handleSaveKeys}
               currentPassword={currentPassword}
             />
           )}
           {currentView === 'favorites' && (
-            <div className="p-6">
-              <div className="text-center py-12 text-gray-500">
-                <Star className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p>收藏夹功能即将推出</p>
-              </div>
-            </div>
+            <FavoritesView
+              keys={keys}
+              onSaveKeys={handleSaveKeys}
+              onEditKey={(key) => {
+                setEditingKey(key)
+                setShowAddModal(true)
+                setCurrentView('keys')
+              }}
+            />
           )}
           {currentView === 'categories' && (
-            <div className="p-6">
-              <div className="text-center py-12 text-gray-500">
-                <FolderTree className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p>分类管理功能即将推出</p>
-              </div>
-            </div>
+            <CategoriesView
+              keys={keys}
+              settings={settings}
+              onSaveKeys={handleSaveKeys}
+              onSettingsChange={handleSettingsChange}
+            />
           )}
           {currentView === 'import-export' && (
-            <div className="p-6">
-              <div className="text-center py-12 text-gray-500">
-                <Upload className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p>导入/导出功能即将推出</p>
-              </div>
-            </div>
+            <ImportExportView
+              keys={keys}
+              settings={settings}
+              currentPassword={currentPassword}
+              onSaveKeys={handleSaveKeys}
+            />
           )}
           {currentView === 'settings' && (
             <SettingsView

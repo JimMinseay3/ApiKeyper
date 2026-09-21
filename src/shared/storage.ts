@@ -9,7 +9,8 @@ const DEFAULT_SETTINGS: Settings = {
   passwordExpiry: 15,
   autoLock: true,
   theme: 'light',
-  language: 'zh-CN'
+  language: 'zh-CN',
+  categories: ['工作', '个人', '测试']
 }
 
 export class CryptoService {
