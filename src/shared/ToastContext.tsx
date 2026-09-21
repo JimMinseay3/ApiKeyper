@@ -40,7 +40,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast, success, error, info, warning }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2">
+      <div className="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none">
         {toasts.map(toast => (
           <ToastItem key={toast.id} toast={toast} />
         ))}
@@ -65,7 +65,7 @@ function ToastItem({ toast }: { toast: Toast }) {
   }
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg animate-slide-in ${styles[toast.type]}`}>
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg animate-slide-in pointer-events-auto ${styles[toast.type]}`}>
       {icons[toast.type]}
       <p className="text-sm font-medium">{toast.message}</p>
     </div>
@@ -74,6 +74,14 @@ function ToastItem({ toast }: { toast: Toast }) {
 
 export function useToast() {
   const context = useContext(ToastContext)
-  if (!context) throw new Error('useToast must be used within ToastProvider')
+  if (!context) {
+    return {
+      showToast: () => {},
+      success: () => {},
+      error: () => {},
+      info: () => {},
+      warning: () => {}
+    }
+  }
   return context
 }

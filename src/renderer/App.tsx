@@ -8,6 +8,7 @@ import CategoriesView from './components/CategoriesView'
 import ImportExportView from './components/ImportExportView'
 import SettingsView from './components/SettingsView'
 import AboutView from './components/AboutView'
+import { useShortcut } from '@/shared/KeyboardContext'
 
 function App() {
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -27,6 +28,14 @@ function App() {
   useEffect(() => {
     setIsFirstTime(!StorageService.hasMasterPassword())
   }, [])
+
+  // 快捷键：Ctrl/Cmd + L 锁定应用
+  useShortcut({
+    key: 'l',
+    ctrl: true,
+    action: handleLock,
+    description: '锁定应用'
+  })
 
   // 自动锁定功能
   useEffect(() => {
@@ -186,18 +195,18 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
       {/* 侧边栏 */}
-      <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} bg-white border-r border-gray-200 transition-all duration-300 overflow-hidden flex-shrink-0`}>
+      <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden flex-shrink-0`}>
         <div className="h-full flex flex-col">
-          <div className="p-6 border-b border-gray-200">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="bg-indigo-100 p-2 rounded-lg">
-                <Lock className="w-5 h-5 text-indigo-600" />
+              <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-lg">
+                <Lock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-gray-900">ApiKeyper</h1>
-                <p className="text-xs text-gray-500">安全管理工具</p>
+                <h1 className="text-lg font-bold text-gray-900 dark:text-white">ApiKeyper</h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">安全管理工具</p>
               </div>
             </div>
           </div>

@@ -1,6 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { ApiKey, Settings } from '@/types'
 import { Plus, Search, Copy, Trash2, Edit, Eye, EyeOff, Star } from 'lucide-react'
+import { useToast } from '@/shared/ToastContext'
+import { useShortcut } from '@/shared/KeyboardContext'
 
 interface KeysViewProps {
   keys: ApiKey[]
@@ -15,6 +17,28 @@ export default function KeysView({ keys, settings, onSaveKeys, currentPassword }
   const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
   const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({})
   const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const toast = useToast()
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // 快捷键：Ctrl/Cmd + F 聚焦搜索框
+  useShortcut({
+    key: 'f',
+    ctrl: true,
+    action: () => searchInputRef.current?.focus(),
+    description: '聚焦搜索框'
+  })
+
+  // 快捷键：Ctrl/Cmd + N 添加新 Key
+  useShortcut({
+    key: 'n',
+    ctrl: true,
+    action: () => {
+      setEditingKey(null)
+      setShowAddModal(true)
+    },
+    description: '添加新 API Key'
+  })
 
   const handleSaveKey = async (keyData: Partial<ApiKey>) => {
     const newKey: ApiKey = {
@@ -44,8 +68,50 @@ export default function KeysView({ keys, settings, onSaveKeys, currentPassword }
     }
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('已复制到剪贴板')
+
+      // 30秒后清空剪贴板（安全特性）
+      setTimeout(async () => {
+        const current = await navigator.clipboard.readText()
+        if (current === text) {
+          await navigator.clipboard.writeText('')
+        }
+      }, 30000)
+    } catch (error) {
+      toast.error('复制失败')
+    }
+  }
+
+  const handleBatchDelete = () => {
+    if (selectedKeys.size === 0) return
+
+    if (confirm(`确定要删除选中的 ${selectedKeys.size} 个 API Key 吗？`)) {
+      const updatedKeys = keys.filter(k => !selectedKeys.has(k.id))
+      onSaveKeys(updatedKeys)
+      setSelectedKeys(new Set())
+      toast.success(`已删除 ${selectedKeys.size} 个 API Key`)
+    }
+  }
+
+  const handleSelectAll = () => {
+    if (selectedKeys.size === filteredKeys.length) {
+      setSelectedKeys(new Set())
+    } else {
+      setSelectedKeys(new Set(filteredKeys.map(k => k.id)))
+    }
+  }
+
+  const toggleSelectKey = (id: string) => {
+    const newSelected = new Set(selectedKeys)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedKeys(newSelected)
   }
 
   const togglePasswordVisibility = (id: string) => {
@@ -72,44 +138,55 @@ export default function KeysView({ keys, settings, onSaveKeys, currentPassword }
   })
 
   return (
-    <div className="p-6">
-      <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-        <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 md:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">我的 API Keys</h2>
-            <p className="text-sm text-gray-600 mt-1">共 {keys.length} 个密钥</p>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">我的 API Keys</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">共 {keys.length} 个密钥</p>
           </div>
-          <button
-            onClick={() => {
-              setEditingKey(null)
-              setShowAddModal(true)
-            }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            添加 Key
-          </button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            {selectedKeys.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                className="flex-1 sm:flex-none bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                删除 ({selectedKeys.size})
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setEditingKey(null)
+                setShowAddModal(true)
+              }}
+              className="flex-1 sm:flex-none bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              添加 Key
+            </button>
+          </div>
         </div>
 
         {/* 分类过滤 */}
-        <div className="mb-4">
-          <div className="flex flex-wrap gap-2">
+        <div className="mb-4 overflow-x-auto">
+          <div className="flex flex-nowrap gap-2 pb-2">
             <button
               onClick={() => setFilterCategory('all')}
-              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+              className={`flex-shrink-0 px-3 py-1 rounded-lg text-sm transition-colors ${
                 filterCategory === 'all'
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               全部 ({keys.length})
             </button>
             <button
               onClick={() => setFilterCategory('uncategorized')}
-              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+              className={`flex-shrink-0 px-3 py-1 rounded-lg text-sm transition-colors ${
                 filterCategory === 'uncategorized'
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               未分类 ({keys.filter(k => !k.category).length})
@@ -118,10 +195,10 @@ export default function KeysView({ keys, settings, onSaveKeys, currentPassword }
               <button
                 key={cat}
                 onClick={() => setFilterCategory(cat)}
-                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                className={`flex-shrink-0 px-3 py-1 rounded-lg text-sm transition-colors ${
                   filterCategory === cat
                     ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
                 {cat} ({keys.filter(k => k.category === cat).length})
@@ -133,22 +210,44 @@ export default function KeysView({ keys, settings, onSaveKeys, currentPassword }
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
+            ref={searchInputRef}
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="搜索平台名称、标签..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder="搜索平台名称、标签... (Ctrl+F)"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
         </div>
+
+        {filteredKeys.length > 0 && (
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={selectedKeys.size === filteredKeys.length && filteredKeys.length > 0}
+              onChange={handleSelectAll}
+              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {selectedKeys.size > 0 ? `已选择 ${selectedKeys.size} 个` : '全选'}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4">
         {filteredKeys.map(key => (
-          <div key={key.id} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-lg font-semibold text-gray-900">{key.name}</h3>
+          <div key={key.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 md:p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={selectedKeys.has(key.id)}
+                onChange={() => toggleSelectKey(key.id)}
+                className="mt-1 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+              />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">{key.name}</h3>
                   <button
                     onClick={() => handleToggleFavorite(key.id)}
                     className={`transition-colors ${
@@ -156,25 +255,25 @@ export default function KeysView({ keys, settings, onSaveKeys, currentPassword }
                     }`}
                     title={key.isFavorite ? '取消收藏' : '收藏'}
                   >
-                    <Star className={`w-5 h-5 ${key.isFavorite ? 'fill-current' : ''}`} />
+                    <Star className={`w-4 h-4 md:w-5 md:h-5 ${key.isFavorite ? 'fill-current' : ''}`} />
                   </button>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">{key.platform}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{key.platform}</p>
 
                 <div className="flex items-center gap-2 mb-2">
-                  <code className="flex-1 bg-gray-50 px-3 py-2 rounded-lg text-sm font-mono text-gray-700 overflow-hidden">
-                    {showPassword[key.id] ? key.key : '•'.repeat(32)}
+                  <code className="flex-1 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg text-xs md:text-sm font-mono text-gray-700 dark:text-gray-300 overflow-hidden break-all">
+                    {showPassword[key.id] ? key.key : '•'.repeat(Math.min(key.key.length, 32))}
                   </code>
                   <button
                     onClick={() => togglePasswordVisibility(key.id)}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
                     title={showPassword[key.id] ? '隐藏' : '显示'}
                   >
                     {showPassword[key.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={() => copyToClipboard(key.key)}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
                     title="复制"
                   >
                     <Copy className="w-4 h-4" />
@@ -182,37 +281,37 @@ export default function KeysView({ keys, settings, onSaveKeys, currentPassword }
                 </div>
 
                 {key.note && (
-                  <p className="text-sm text-gray-600 mb-2">{key.note}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{key.note}</p>
                 )}
 
                 <div className="flex gap-2 flex-wrap">
                   {key.category && (
-                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">
+                    <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded">
                       {key.category}
                     </span>
                   )}
                   {key.tags && key.tags.length > 0 && key.tags.map((tag, i) => (
-                    <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded">
+                    <span key={i} className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded">
                       {tag}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div className="flex gap-2 ml-4">
+              <div className="flex gap-2 flex-shrink-0">
                 <button
                   onClick={() => {
                     setEditingKey(key)
                     setShowAddModal(true)
                   }}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   title="编辑"
                 >
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDeleteKey(key.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                   title="删除"
                 >
                   <Trash2 className="w-4 h-4" />

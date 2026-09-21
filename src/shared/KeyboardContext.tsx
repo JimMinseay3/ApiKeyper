@@ -63,7 +63,12 @@ export function KeyboardProvider({ children }: { children: React.ReactNode }) {
 
 export function useKeyboard() {
   const context = useContext(KeyboardContext)
-  if (!context) throw new Error('useKeyboard must be used within KeyboardProvider')
+  if (!context) {
+    return {
+      registerShortcut: () => {},
+      unregisterShortcut: () => {}
+    }
+  }
   return context
 }
 
@@ -74,5 +79,5 @@ export function useShortcut(shortcut: KeyboardShortcut) {
     registerShortcut(shortcut)
     const key = `${shortcut.ctrl ? 'ctrl+' : ''}${shortcut.shift ? 'shift+' : ''}${shortcut.alt ? 'alt+' : ''}${shortcut.key}`
     return () => unregisterShortcut(key)
-  }, [shortcut.key, shortcut.action])
+  }, [shortcut.key, shortcut.action, registerShortcut, unregisterShortcut])
 }
