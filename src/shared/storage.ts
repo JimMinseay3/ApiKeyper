@@ -1,7 +1,16 @@
-import { ApiKey, EncryptedData } from '@/types'
+import { ApiKey, EncryptedData, Settings } from '@/types'
 
 const STORAGE_KEY = 'apikeyper_data'
 const MASTER_PASSWORD_KEY = 'apikeyper_master_hash'
+const SETTINGS_KEY = 'apikeyper_settings'
+
+const DEFAULT_SETTINGS: Settings = {
+  storagePath: 'localStorage',
+  passwordExpiry: 15,
+  autoLock: true,
+  theme: 'light',
+  language: 'zh-CN'
+}
 
 export class CryptoService {
   private static async deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
@@ -125,5 +134,20 @@ export class StorageService {
 
   static hasMasterPassword(): boolean {
     return localStorage.getItem(MASTER_PASSWORD_KEY) !== null
+  }
+
+  static getSettings(): Settings {
+    const stored = localStorage.getItem(SETTINGS_KEY)
+    if (!stored) return DEFAULT_SETTINGS
+
+    try {
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) }
+    } catch {
+      return DEFAULT_SETTINGS
+    }
+  }
+
+  static saveSettings(settings: Settings): void {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   }
 }

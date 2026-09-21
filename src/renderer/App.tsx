@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { ApiKey } from '@/types'
+import { ApiKey, MenuItem, Settings } from '@/types'
 import { StorageService } from '@/shared/storage'
-import { Lock, Plus, Search, Copy, Trash2, Edit, Eye, EyeOff } from 'lucide-react'
+import { Lock, Plus, Search, Copy, Trash2, Edit, Eye, EyeOff, Key, Star, FolderTree, Download, Upload, Settings as SettingsIcon, Info, Menu, X } from 'lucide-react'
+import KeysView from './components/KeysView'
+import SettingsView from './components/SettingsView'
+import AboutView from './components/AboutView'
 
 function App() {
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -9,16 +12,49 @@ function App() {
   const [isFirstTime, setIsFirstTime] = useState(false)
   const [confirmPassword, setConfirmPassword] = useState('')
   const [keys, setKeys] = useState<ApiKey[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
   const [error, setError] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
-  const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({})
+  const [currentView, setCurrentView] = useState<MenuItem>('keys')
+  const [settings, setSettings] = useState<Settings>(StorageService.getSettings())
+  const [lastActivityTime, setLastActivityTime] = useState(Date.now())
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   useEffect(() => {
     setIsFirstTime(!StorageService.hasMasterPassword())
   }, [])
+
+  // 自动锁定功能
+  useEffect(() => {
+    if (!isUnlocked || !settings.autoLock || settings.passwordExpiry === 0) return
+
+    const interval = setInterval(() => {
+      const now = Date.now()
+      const elapsed = (now - lastActivityTime) / 1000 / 60 // 转换为分钟
+
+      if (elapsed >= settings.passwordExpiry) {
+        handleLock()
+      }
+    }, 10000) // 每 10 秒检查一次
+
+    return () => clearInterval(interval)
+  }, [isUnlocked, settings, lastActivityTime])
+
+  // 更新活动时间
+  useEffect(() => {
+    const updateActivity = () => setLastActivityTime(Date.now())
+
+    if (isUnlocked) {
+      window.addEventListener('mousemove', updateActivity)
+      window.addEventListener('keydown', updateActivity)
+      window.addEventListener('click', updateActivity)
+
+      return () => {
+        window.removeEventListener('mousemove', updateActivity)
+        window.removeEventListener('keydown', updateActivity)
+        window.removeEventListener('click', updateActivity)
+      }
+    }
+  }, [isUnlocked])
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,6 +81,7 @@ function App() {
           setKeys(loadedKeys)
           setIsUnlocked(true)
           setCurrentPassword(password)
+          setLastActivityTime(Date.now())
         } catch (err) {
           setError('解密失败，密码可能不正确')
         }
@@ -54,49 +91,31 @@ function App() {
     }
   }
 
-  const handleSaveKey = async (keyData: Partial<ApiKey>) => {
-    const newKey: ApiKey = {
-      id: editingKey?.id || Date.now().toString(),
-      name: keyData.name || '',
-      platform: keyData.platform || '',
-      key: keyData.key || '',
-      note: keyData.note || '',
-      tags: keyData.tags || [],
-      createdAt: editingKey?.createdAt || Date.now(),
-      updatedAt: Date.now()
-    }
+  const handleLock = () => {
+    setIsUnlocked(false)
+    setCurrentPassword('')
+    setPassword('')
+    setKeys([])
+  }
 
-    const updatedKeys = editingKey
-      ? keys.map(k => k.id === editingKey.id ? newKey : k)
-      : [...keys, newKey]
-
+  const handleSaveKeys = async (updatedKeys: ApiKey[]) => {
     await StorageService.saveKeys(updatedKeys, currentPassword)
     setKeys(updatedKeys)
-    setShowAddModal(false)
-    setEditingKey(null)
   }
 
-  const handleDeleteKey = async (id: string) => {
-    if (confirm('确定要删除这个 API Key 吗？')) {
-      const updatedKeys = keys.filter(k => k.id !== id)
-      await StorageService.saveKeys(updatedKeys, currentPassword)
-      setKeys(updatedKeys)
-    }
+  const handleSettingsChange = (newSettings: Settings) => {
+    StorageService.saveSettings(newSettings)
+    setSettings(newSettings)
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-  }
-
-  const togglePasswordVisibility = (id: string) => {
-    setShowPassword(prev => ({ ...prev, [id]: !prev[id] }))
-  }
-
-  const filteredKeys = keys.filter(k =>
-    k.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    k.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    k.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const menuItems = [
+    { id: 'keys' as MenuItem, label: 'API Keys', icon: Key },
+    { id: 'favorites' as MenuItem, label: '收藏夹', icon: Star },
+    { id: 'categories' as MenuItem, label: '分类管理', icon: FolderTree },
+    { id: 'import-export' as MenuItem, label: '导入/导出', icon: Upload },
+    { id: 'settings' as MenuItem, label: '系统设置', icon: SettingsIcon },
+    { id: 'about' as MenuItem, label: '关于', icon: Info },
+  ]
 
   if (!isUnlocked) {
     return (
@@ -162,226 +181,111 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">API Key 管理</h1>
-            <button
-              onClick={() => {
-                setEditingKey(null)
-                setShowAddModal(true)
-              }}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              添加 Key
-            </button>
-          </div>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="搜索平台名称、标签..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4">
-          {filteredKeys.map(key => (
-            <div key={key.id} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">{key.name}</h3>
-                  <p className="text-sm text-gray-600 mb-3">{key.platform}</p>
-
-                  <div className="flex items-center gap-2 mb-2">
-                    <code className="flex-1 bg-gray-50 px-3 py-2 rounded-lg text-sm font-mono text-gray-700 overflow-hidden">
-                      {showPassword[key.id] ? key.key : '•'.repeat(32)}
-                    </code>
-                    <button
-                      onClick={() => togglePasswordVisibility(key.id)}
-                      className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      title={showPassword[key.id] ? '隐藏' : '显示'}
-                    >
-                      {showPassword[key.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => copyToClipboard(key.key)}
-                      className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="复制"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {key.note && (
-                    <p className="text-sm text-gray-600 mb-2">{key.note}</p>
-                  )}
-
-                  {key.tags && key.tags.length > 0 && (
-                    <div className="flex gap-2">
-                      {key.tags.map((tag, i) => (
-                        <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 ml-4">
-                  <button
-                    onClick={() => {
-                      setEditingKey(key)
-                      setShowAddModal(true)
-                    }}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="编辑"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteKey(key.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="删除"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* 侧边栏 */}
+      <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} bg-white border-r border-gray-200 transition-all duration-300 overflow-hidden flex-shrink-0`}>
+        <div className="h-full flex flex-col">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-100 p-2 rounded-lg">
+                <Lock className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">ApiKeyper</h1>
+                <p className="text-xs text-gray-500">安全管理工具</p>
               </div>
             </div>
-          ))}
+          </div>
 
-          {filteredKeys.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              {searchTerm ? '没有找到匹配的 API Key' : '还没有添加任何 API Key'}
-            </div>
-          )}
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+            {menuItems.map((item) => {
+              const Icon = item.icon
+              const isActive = currentView === item.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentView(item.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-indigo-50 text-indigo-600'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="font-medium">{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+
+          <div className="p-4 border-t border-gray-200">
+            <button
+              onClick={handleLock}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Lock className="w-5 h-5" />
+              <span className="font-medium">锁定</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {showAddModal && (
-        <AddKeyModal
-          key={editingKey?.id || 'new'}
-          initialData={editingKey}
-          onSave={handleSaveKey}
-          onClose={() => {
-            setShowAddModal(false)
-            setEditingKey(null)
-          }}
-        />
-      )}
-    </div>
-  )
-}
+      {/* 主内容区 */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 顶部栏 */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4">
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+          <h2 className="text-xl font-semibold text-gray-900">
+            {menuItems.find(item => item.id === currentView)?.label}
+          </h2>
+        </div>
 
-interface AddKeyModalProps {
-  initialData: ApiKey | null
-  onSave: (data: Partial<ApiKey>) => void
-  onClose: () => void
-}
-
-function AddKeyModal({ initialData, onSave, onClose }: AddKeyModalProps) {
-  const [formData, setFormData] = useState({
-    name: initialData?.name || '',
-    platform: initialData?.platform || '',
-    key: initialData?.key || '',
-    note: initialData?.note || '',
-    tags: initialData?.tags?.join(', ') || ''
-  })
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSave({
-      ...formData,
-      tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
-    })
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
-          {initialData ? '编辑 API Key' : '添加 API Key'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">名称</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              required
+        {/* 内容区域 */}
+        <div className="flex-1 overflow-auto">
+          {currentView === 'keys' && (
+            <KeysView
+              keys={keys}
+              onSaveKeys={handleSaveKeys}
+              currentPassword={currentPassword}
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">平台</label>
-            <input
-              type="text"
-              value={formData.platform}
-              onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              placeholder="例如: OpenAI, Anthropic"
-              required
+          )}
+          {currentView === 'favorites' && (
+            <div className="p-6">
+              <div className="text-center py-12 text-gray-500">
+                <Star className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p>收藏夹功能即将推出</p>
+              </div>
+            </div>
+          )}
+          {currentView === 'categories' && (
+            <div className="p-6">
+              <div className="text-center py-12 text-gray-500">
+                <FolderTree className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p>分类管理功能即将推出</p>
+              </div>
+            </div>
+          )}
+          {currentView === 'import-export' && (
+            <div className="p-6">
+              <div className="text-center py-12 text-gray-500">
+                <Upload className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p>导入/导出功能即将推出</p>
+              </div>
+            </div>
+          )}
+          {currentView === 'settings' && (
+            <SettingsView
+              settings={settings}
+              onSettingsChange={handleSettingsChange}
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
-            <input
-              type="text"
-              value={formData.key}
-              onChange={(e) => setFormData({ ...formData, key: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">备注（可选）</label>
-            <textarea
-              value={formData.note}
-              onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">标签（可选，逗号分隔）</label>
-            <input
-              type="text"
-              value={formData.tags}
-              onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              placeholder="例如: AI, 生产环境"
-            />
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              保存
-            </button>
-          </div>
-        </form>
+          )}
+          {currentView === 'about' && <AboutView />}
+        </div>
       </div>
     </div>
   )
