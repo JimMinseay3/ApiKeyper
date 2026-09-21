@@ -9,8 +9,7 @@ function createWindow() {
     minHeight: 600,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      contextIsolation: true
     },
     autoHideMenuBar: true,
     backgroundColor: '#f9fafb'
@@ -22,6 +21,15 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+
+  // 输出错误信息到控制台
+  win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Failed to load:', errorCode, errorDescription)
+  })
+
+  win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`Console [${level}]:`, message, 'at', sourceId, line)
+  })
 }
 
 app.whenReady().then(() => {

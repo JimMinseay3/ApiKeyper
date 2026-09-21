@@ -8,7 +8,6 @@ import CategoriesView from './components/CategoriesView'
 import ImportExportView from './components/ImportExportView'
 import SettingsView from './components/SettingsView'
 import AboutView from './components/AboutView'
-import { useShortcut } from '@/shared/KeyboardContext'
 
 function App() {
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -28,14 +27,6 @@ function App() {
   useEffect(() => {
     setIsFirstTime(!StorageService.hasMasterPassword())
   }, [])
-
-  // 快捷键：Ctrl/Cmd + L 锁定应用
-  useShortcut({
-    key: 'l',
-    ctrl: true,
-    action: handleLock,
-    description: '锁定应用'
-  })
 
   // 自动锁定功能
   useEffect(() => {

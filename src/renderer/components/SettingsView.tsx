@@ -1,8 +1,6 @@
 import React, { useState } from 'react'
 import { Settings } from '@/types'
 import { FolderOpen, Clock, Shield } from 'lucide-react'
-import { useTheme } from '@/shared/ThemeContext'
-import { useToast } from '@/shared/ToastContext'
 
 interface SettingsViewProps {
   settings: Settings
@@ -11,13 +9,10 @@ interface SettingsViewProps {
 
 export default function SettingsView({ settings, onSettingsChange }: SettingsViewProps) {
   const [localSettings, setLocalSettings] = useState(settings)
-  const { theme, setTheme } = useTheme()
-  const toast = useToast()
 
   const handleSave = () => {
     onSettingsChange(localSettings)
-    setTheme(localSettings.theme)
-    toast.success('设置已保存')
+    alert('设置已保存')
   }
 
   return (
